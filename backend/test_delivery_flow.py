@@ -86,7 +86,7 @@ def main():
     print(f"Order successfully found in customer's order history.")
 
     print("\n=== 5. Testing Admin Live Board & Dashboard ===")
-    s, admin_auth = post_json(f"{API_URL}/auth/login", {"email": "admin@modernfood.com", "password": "adminpassword123"})
+    s, admin_auth = post_json(f"{API_URL}/auth/login", {"email": "admin@restaurant.com", "password": "admin123"})
     assert s == 200, f"Admin login failed: {admin_auth}"
     admin_token = admin_auth["access_token"]
     
