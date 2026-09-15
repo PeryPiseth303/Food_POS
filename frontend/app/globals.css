@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 33% 98%;
+    --foreground: 20 14.3% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+    --primary: 24.6 95% 53.1%; /* Warm Amber / Orange */
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 30 20% 94%;
+    --secondary-foreground: 24 9.8% 10%;
+    --muted: 30 20% 94%;
+    --muted-foreground: 25 5.3% 44.7%;
+    --accent: 30 20% 92%;
+    --accent-foreground: 24 9.8% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 30 15% 88%;
+    --input: 30 15% 88%;
+    --ring: 24.6 95% 53.1%;
+    --radius: 0.85rem;
+    --chart-1: 24.6 95% 53.1%;
+    --chart-2: 142.1 76.2% 36.3%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+
+  .dark {
+    --background: 24 10% 8%;
+    --foreground: 60 9.1% 97.8%;
+    --card: 24 10% 11%;
+    --card-foreground: 60 9.1% 97.8%;
+    --popover: 24 10% 11%;
+    --popover-foreground: 60 9.1% 97.8%;
+    --primary: 24.6 95% 53.1%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 24 10% 16%;
+    --secondary-foreground: 60 9.1% 97.8%;
+    --muted: 24 10% 16%;
+    --muted-foreground: 24 5% 64.9%;
+    --accent: 24 10% 16%;
+    --accent-foreground: 60 9.1% 97.8%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 24 10% 18%;
+    --input: 24 10% 18%;
+    --ring: 24.6 95% 53.1%;
+  }
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Hide scrollbar for category tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
