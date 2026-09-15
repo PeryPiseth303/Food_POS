@@ -28,6 +28,7 @@ export default function CustomerAuthModal({
   // Form states
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -65,9 +66,11 @@ export default function CustomerAuthModal({
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await loginCustomer({ email, password });
+      const res = await loginCustomer({ email: email.trim(), password });
       loginCustomerStore(res.customer, res.access_token);
       toast.success(`Welcome back, ${res.customer.full_name}!`);
+      setPassword("");
+      setConfirmPassword("");
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to sign in. Please check credentials.");
@@ -82,21 +85,29 @@ export default function CustomerAuthModal({
       toast.error("Please enter your full name.");
       return;
     }
-    if (!phone.trim()) {
-      toast.error("Please enter your phone number for online orders.");
+    if (!email.trim()) {
+      toast.error("Please enter your email address.");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match. Please verify your confirm password.");
       return;
     }
     setIsLoading(true);
     try {
       const res = await registerCustomer({
-        email,
+        email: email.trim(),
         password,
-        full_name: fullName,
-        phone,
-        delivery_address: address,
+        full_name: fullName.trim(),
       });
       loginCustomerStore(res.customer, res.access_token);
-      toast.success("Account created successfully! Your details are saved for online ordering.");
+      toast.success(`Welcome, ${res.customer.full_name}! Your account has been created.`);
+      setPassword("");
+      setConfirmPassword("");
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to create account.");
@@ -271,11 +282,11 @@ export default function CustomerAuthModal({
 
           {/* TAB 2: REGISTER */}
           {activeTab === "register" && !customer && (
-            <form onSubmit={handleRegister} className="space-y-3">
+            <form onSubmit={handleRegister} className="space-y-3.5">
               <div className="text-center pb-1">
-                <h3 className="font-extrabold text-base text-foreground">Create Online Ordering Account</h3>
+                <h3 className="font-extrabold text-base text-foreground">Create Your Account</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Save your address and phone number for instant checkout when ordering from home.
+                  Sign up with your name and email. Phone and delivery location will be requested when you place an order.
                 </p>
               </div>
 
@@ -294,22 +305,22 @@ export default function CustomerAuthModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1">Email *</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@example.com"
-                      className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                    />
-                  </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Email Address *</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1">Password *</label>
                   <div className="relative">
@@ -319,40 +330,34 @@ export default function CustomerAuthModal({
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="At least 6 chars"
+                      className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">Confirm Password *</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
                       className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
                     />
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">Phone Number (for Delivery) *</label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 (555) 012-3456"
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">Delivery Address / Location</label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-muted-foreground absolute left-3 top-3" />
-                  <textarea
-                    rows={2}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="House / Apartment #, Street, City, Landmark"
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl bg-secondary/40 border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 resize-none"
-                  />
-                </div>
+              {/* Helpful Info Notice */}
+              <div className="p-3 rounded-2xl bg-secondary/40 border border-border/80 flex items-start gap-2.5 text-xs text-muted-foreground">
+                <MapPin className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+                <span>
+                  Your contact phone and delivery location will be requested at checkout when you place your order.
+                </span>
               </div>
 
               <button
@@ -360,7 +365,7 @@ export default function CustomerAuthModal({
                 disabled={isLoading}
                 className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-[0.98] transition-all disabled:opacity-50 mt-1"
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save & Create Account"}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Account"}
               </button>
 
               <div className="text-center pt-1">

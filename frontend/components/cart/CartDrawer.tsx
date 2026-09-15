@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useCart } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
-import { createOrder } from "@/lib/api";
+import { createOrder, updateCustomerProfile } from "@/lib/api";
 import {
   X,
   Trash2,
@@ -48,6 +48,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     orderType,
     setOrderType,
     customer,
+    customerToken,
+    updateCustomerStore,
     customerName,
     setCustomerName,
     customerPhone,
@@ -121,6 +123,18 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       };
 
       const createdOrder = await createOrder(orderPayload);
+
+      // If customer is logged in, auto-save phone & delivery address to their profile for future orders
+      if (customer && customerToken && (customerPhone.trim() || (isDelivery && deliveryAddress.trim()))) {
+        updateCustomerProfile({
+          full_name: customerName.trim() || customer.full_name,
+          phone: customerPhone.trim() || customer.phone || undefined,
+          delivery_address: isDelivery ? deliveryAddress.trim() : (customer.delivery_address || undefined),
+        }, customerToken).then((updated) => {
+          updateCustomerStore(updated);
+        }).catch(() => {});
+      }
+
       toast.success(
         isDelivery
           ? `Online Order #${createdOrder.order_number} received! Dispatched to kitchen & delivery.`
