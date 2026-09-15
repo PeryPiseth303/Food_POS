@@ -205,7 +205,7 @@ async def seed_data():
                 name="Crispy Truffle Parmesan Fries",
                 description="Hand-cut golden Idaho potatoes, aromatic white truffle oil, shaved 24-month Parmigiano-Reggiano, rosemary aioli.",
                 price=8.50,
-                image_url="https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=800&q=80",
+                image_url="https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80",
                 is_popular=True,
                 dietary_tags="vegetarian",
                 sort_order=1
@@ -225,7 +225,7 @@ async def seed_data():
                 name="Burrata Caprese Crostini",
                 description="Creamy Pugliese burrata, heirloom cherry tomatoes, aged balsamic reduction on toasted sourdough.",
                 price=11.50,
-                image_url="https://images.unsplash.com/photo-1592417817098-8f3d6910985b?auto=format&fit=crop&w=800&q=80",
+                image_url="https://images.unsplash.com/photo-1572695157366-5e585ab2b69f?auto=format&fit=crop&w=800&q=80",
                 is_popular=False,
                 dietary_tags="vegetarian",
                 sort_order=3
