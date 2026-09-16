@@ -130,7 +130,21 @@ export interface CustomerUser {
   full_name: string;
   phone?: string | null;
   delivery_address?: string | null;
+  is_verified?: boolean;
   created_at: string;
+}
+
+export interface CustomerRegisterResponse {
+  requires_verification: boolean;
+  email: string;
+  message: string;
+  debug_otp?: string | null;
+}
+
+export interface CustomerResendOtpResponse {
+  success: boolean;
+  message: string;
+  debug_otp?: string | null;
 }
 
 export interface CustomerTokenResponse {
@@ -156,4 +170,14 @@ export interface CreateOrderPayload {
     customizations?: any;
     notes?: string;
   }[];
+}
+
+export interface StaffNotification {
+  id: number;
+  table_number: string;
+  notification_type: string;
+  message: string;
+  status: "unread" | "resolved";
+  created_at: string;
+  resolved_at?: string | null;
 }

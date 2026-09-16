@@ -1,4 +1,4 @@
-import { FullMenuResponse, TableSession, Order, AnalyticsSummary, TableData, Category, MenuItem, CustomerUser, CustomerTokenResponse } from "./types";
+import { FullMenuResponse, TableSession, Order, AnalyticsSummary, TableData, Category, MenuItem, CustomerUser, CustomerTokenResponse, CustomerRegisterResponse, CustomerResendOtpResponse, StaffNotification } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_V1 = `${API_BASE_URL}/api/v1`;
@@ -35,7 +35,7 @@ export async function registerCustomer(payload: {
   full_name: string;
   phone?: string;
   delivery_address?: string;
-}): Promise<CustomerTokenResponse> {
+}): Promise<CustomerRegisterResponse> {
   const res = await fetch(`${API_V1}/customer/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -45,12 +45,43 @@ export async function registerCustomer(payload: {
     const err = await res.json().catch(() => ({ detail: "Registration failed" }));
     throw new Error(err.detail || "Registration failed");
   }
-  const data = await res.json();
+  return await res.json();
+}
+
+export async function verifyCustomerOtp(payload: {
+  email: string;
+  otp_code: string;
+}): Promise<CustomerTokenResponse> {
+  const res = await fetch(`${API_V1}/customer/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Verification failed" }));
+    throw new Error(err.detail || "Verification failed");
+  }
+  const data: CustomerTokenResponse = await res.json();
   if (typeof window !== "undefined") {
     localStorage.setItem("customer_token", data.access_token);
     localStorage.setItem("customer_user", JSON.stringify(data.customer));
   }
   return data;
+}
+
+export async function resendCustomerOtp(payload: {
+  email: string;
+}): Promise<CustomerResendOtpResponse> {
+  const res = await fetch(`${API_V1}/customer/resend-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to resend code" }));
+    throw new Error(err.detail || "Failed to resend code");
+  }
+  return await res.json();
 }
 
 export async function loginCustomer(payload: {
@@ -64,7 +95,13 @@ export async function loginCustomer(payload: {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Login failed" }));
-    throw new Error(err.detail || "Invalid email or password");
+    const errorMsg = typeof err.detail === "string" ? err.detail : (err.detail?.message || "Invalid email or password");
+    const errorObj = new Error(errorMsg) as any;
+    if (res.status === 403 && errorMsg.includes("EMAIL_NOT_VERIFIED")) {
+      errorObj.requiresVerification = true;
+      errorObj.email = payload.email;
+    }
+    throw errorObj;
   }
   const data = await res.json();
   if (typeof window !== "undefined") {
@@ -140,6 +177,16 @@ export async function validateTable(
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Failed to validate table" }));
     throw new Error(err.detail || "Invalid table QR code");
+  }
+  return res.json();
+}
+
+export async function getTableActiveOrders(tableIdentifier: string): Promise<Order[]> {
+  const res = await fetch(`${API_V1}/tables/${tableIdentifier}/active-orders`, {
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    return [];
   }
   return res.json();
 }
@@ -339,5 +386,58 @@ export async function getSalesAnalytics(): Promise<AnalyticsSummary> {
   if (!res.ok) {
     throw new Error("Failed to fetch analytics data");
   }
+  return res.json();
+}
+
+// ==========================================
+// 9. Staff Notifications API
+// ==========================================
+export async function callStaff(tableNumber: string | number, message?: string): Promise<StaffNotification> {
+  const tbl = String(tableNumber || "1").trim();
+  const res = await fetch(`${API_V1}/notifications/call-staff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      table_number: tbl,
+      notification_type: "call_staff",
+      message: message || `Table #${tbl} requested staff assistance.`
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to alert staff" }));
+    const errorMsg = Array.isArray(err.detail)
+      ? err.detail.map((d: any) => d.msg || "").join(", ")
+      : typeof err.detail === "string"
+      ? err.detail
+      : "Failed to alert staff";
+    throw new Error(errorMsg || "Failed to alert staff");
+  }
+  return res.json();
+}
+
+export async function getStaffNotifications(): Promise<StaffNotification[]> {
+  const res = await fetch(`${API_V1}/notifications`, {
+    headers: { ...getAuthHeader() },
+    cache: "no-store"
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function resolveStaffNotification(id: number): Promise<StaffNotification> {
+  const res = await fetch(`${API_V1}/notifications/${id}/resolve`, {
+    method: "PATCH",
+    headers: { ...getAuthHeader() }
+  });
+  if (!res.ok) throw new Error("Failed to resolve notification");
+  return res.json();
+}
+
+export async function clearAllNotifications(): Promise<{ message: string }> {
+  const res = await fetch(`${API_V1}/notifications/clear`, {
+    method: "DELETE",
+    headers: { ...getAuthHeader() }
+  });
+  if (!res.ok) throw new Error("Failed to clear notifications");
   return res.json();
 }

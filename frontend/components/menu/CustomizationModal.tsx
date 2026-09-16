@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import Image from "next/image";
 import { MenuItem, CustomizationChoice } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-import { X, Plus, Minus, Flame, Check } from "lucide-react";
+import { X, Plus, Minus, Flame, Check, Sparkles, Utensils, MessageSquare } from "lucide-react";
 
 interface CustomizationModalProps {
   item: MenuItem;
@@ -25,7 +25,7 @@ export default function CustomizationModal({
 
   if (!isOpen) return null;
 
-  // Set default options on first load
+  // Customization groups
   const customizationGroups = item.customizations || [];
 
   const handleSingleSelect = (groupId: string, optionName: string) => {
@@ -67,37 +67,50 @@ export default function CustomizationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl border border-border overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col shadow-2xl border border-border/80 overflow-hidden animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200">
+        {/* Mobile Pull Bar */}
+        <div className="sm:hidden pt-2 pb-1 flex justify-center bg-card">
+          <div className="w-12 h-1 rounded-full bg-muted-foreground/30" />
+        </div>
+
         {/* Header & Image */}
-        <div className="relative h-48 sm:h-56 w-full bg-stone-100 dark:bg-stone-900 shrink-0">
+        <div className="relative h-44 sm:h-56 w-full bg-stone-100 dark:bg-stone-900 shrink-0">
           {item.image_url ? (
-            <Image
-              src={item.image_url}
-              alt={item.name}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 500px"
-            />
+            <>
+              <Image
+                src={item.image_url}
+                alt={item.name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 520px"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-              No photo available
+            <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground bg-secondary/80">
+              <Utensils className="w-8 h-8 opacity-40 mb-1" />
+              <span className="text-xs">Bistro Moderne Dish</span>
             </div>
           )}
+
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors backdrop-blur-md"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors backdrop-blur-md shadow-md"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Scrollable */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xl font-bold text-foreground">{item.name}</h2>
-              <span className="text-lg font-extrabold text-orange-600 dark:text-orange-400">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg sm:text-xl font-black text-foreground tracking-tight">
+                {item.name}
+              </h2>
+              <span className="text-base sm:text-lg font-black text-orange-600 dark:text-orange-400 shrink-0">
                 {formatCurrency(item.price)}
               </span>
             </div>
@@ -112,18 +125,18 @@ export default function CustomizationModal({
             const currentSelected = selectedOptions[group.id];
 
             return (
-              <div key={group.id} className="pt-3 border-t border-border/70">
+              <div key={group.id} className="pt-3.5 border-t border-border/70">
                 <div className="flex items-center justify-between mb-2.5">
-                  <h3 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                  <h3 className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
                     {group.name}
                     {group.required && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-600 font-medium">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 font-extrabold">
                         Required
                       </span>
                     )}
                   </h3>
-                  <span className="text-xs text-muted-foreground">
-                    {isSingle ? "Select 1" : "Optional extras"}
+                  <span className="text-[11px] text-muted-foreground">
+                    {isSingle ? "Select 1" : "Optional additions"}
                   </span>
                 </div>
 
@@ -152,13 +165,13 @@ export default function CustomizationModal({
                             handleMultiSelect(group.id, { name: optName, price: optPrice || 0 });
                           }
                         }}
-                        className={`px-3.5 py-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                        className={`px-3.5 py-2.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
                           isChecked
-                            ? "bg-orange-50 border-orange-500/80 text-orange-900 dark:bg-orange-950/40 dark:border-orange-500 dark:text-orange-200"
-                            : "bg-secondary/40 border-border hover:bg-secondary/80 text-foreground"
+                            ? "bg-orange-500/10 border-orange-500 text-orange-950 dark:text-orange-200 ring-1 ring-orange-500/40 shadow-xs"
+                            : "bg-secondary/40 border-border/80 hover:bg-secondary/80 text-foreground"
                         }`}
                       >
-                        <span className="text-xs font-medium">{optName}</span>
+                        <span className="text-xs font-semibold">{optName}</span>
                         <div className="flex items-center gap-2">
                           {optPrice && optPrice > 0 ? (
                             <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
@@ -166,7 +179,9 @@ export default function CustomizationModal({
                             </span>
                           ) : null}
                           {isChecked && (
-                            <Check className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0" />
+                            <div className="w-4 h-4 rounded-full bg-orange-600 text-white flex items-center justify-center shrink-0">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
                           )}
                         </div>
                       </button>
@@ -178,42 +193,45 @@ export default function CustomizationModal({
           })}
 
           {/* Kitchen Notes */}
-          <div className="pt-3 border-t border-border/70">
-            <label className="block text-xs font-semibold text-foreground mb-1.5">
+          <div className="pt-3.5 border-t border-border/70">
+            <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
               Special Instructions for Kitchen (Optional)
             </label>
             <input
               type="text"
-              placeholder="e.g., Dressing on the side, allergies, extra crispy"
+              placeholder="e.g. Extra sauce, no onions, gluten sensitivity..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+              className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/40 transition-all"
             />
           </div>
         </div>
 
         {/* Footer with Quantity & Add Button */}
-        <div className="p-4 border-t border-border bg-card/90 backdrop-blur-md flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center border border-border rounded-xl bg-secondary/50 p-1">
+        <div className="p-4 sm:p-5 border-t border-border/80 bg-card/95 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 pb-safe">
+          <div className="flex items-center border border-border/80 rounded-2xl bg-secondary/50 p-1">
             <button
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
               disabled={quantity <= 1}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-foreground hover:bg-background disabled:opacity-30 transition-colors"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-foreground hover:bg-card disabled:opacity-30 transition-all active:scale-90"
+              aria-label="Decrease quantity"
             >
-              <Minus className="w-3.5 h-3.5" />
+              <Minus className="w-4 h-4" />
             </button>
-            <span className="w-8 text-center text-sm font-bold">{quantity}</span>
+            <span className="w-9 text-center text-sm font-extrabold">{quantity}</span>
             <button
               onClick={() => setQuantity(quantity + 1)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-foreground hover:bg-background transition-colors"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-foreground hover:bg-card transition-all active:scale-90"
+              aria-label="Increase quantity"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
             </button>
           </div>
 
           <button
             onClick={handleSubmit}
-            className="flex-1 py-3 px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm flex items-center justify-between shadow-lg shadow-orange-500/25 active:scale-[0.98] transition-all"
+            className="flex-1 py-3 px-4 sm:px-5 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-between shadow-lg shadow-orange-500/25 active:scale-[0.98] transition-all"
           >
             <span>Add to Order</span>
             <span>{formatCurrency(totalPrice)}</span>

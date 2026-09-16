@@ -1,5 +1,5 @@
-from datetime import timedelta
-from typing import List
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,7 +9,11 @@ from app.models.user import CustomerUser
 from app.models.order import Order
 from app.schemas.user import (
     CustomerRegister,
+    CustomerRegisterResponse,
     CustomerLogin,
+    CustomerVerifyOTP,
+    CustomerResendOTP,
+    CustomerResendOTPResponse,
     CustomerUpdate,
     CustomerOut,
     CustomerTokenResponse,
@@ -18,8 +22,18 @@ from app.schemas.order import OrderOut, OrderItemOut
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.config import settings
 from app.api.deps import get_current_customer
+from app.services.email_service import generate_otp_code, get_otp_expiry, send_otp_email
 
 router = APIRouter(prefix="/customer", tags=["Customer Authentication"])
+
+
+def is_otp_expired(expires_at: Optional[datetime]) -> bool:
+    if not expires_at:
+        return True
+    now = datetime.now(timezone.utc)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return now > expires_at
 
 
 def format_customer_order(order: Order) -> OrderOut:
@@ -63,28 +77,107 @@ def format_customer_order(order: Order) -> OrderOut:
     )
 
 
-@router.post("/register", response_model=CustomerTokenResponse)
+@router.post("/register", response_model=CustomerRegisterResponse)
 async def register_customer(
     reg_in: CustomerRegister,
     db: AsyncSession = Depends(get_db)
 ):
-    """Register a new customer account for ordering online from home."""
-    existing = await db.execute(select(CustomerUser).where(CustomerUser.email == reg_in.email))
-    if existing.scalar_one_or_none():
+    """Register a new customer account and send a 6-digit verification code via email."""
+    existing_res = await db.execute(select(CustomerUser).where(CustomerUser.email == reg_in.email))
+    customer = existing_res.scalar_one_or_none()
+
+    if customer and customer.is_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email address already exists."
+            detail="An account with this email address already exists. Please sign in."
         )
 
-    customer = CustomerUser(
-        email=reg_in.email,
-        hashed_password=get_password_hash(reg_in.password),
-        full_name=reg_in.full_name,
-        phone=reg_in.phone,
-        delivery_address=reg_in.delivery_address,
-        is_active=True
+    otp_code = generate_otp_code()
+    otp_expiry = get_otp_expiry()
+
+    if customer and not customer.is_verified:
+        # Customer previously registered but never verified: update password and send new OTP
+        customer.hashed_password = get_password_hash(reg_in.password)
+        customer.full_name = reg_in.full_name
+        if reg_in.phone:
+            customer.phone = reg_in.phone
+        if reg_in.delivery_address:
+            customer.delivery_address = reg_in.delivery_address
+        customer.otp_code = otp_code
+        customer.otp_expires_at = otp_expiry
+        customer.is_active = True
+    else:
+        customer = CustomerUser(
+            email=reg_in.email,
+            hashed_password=get_password_hash(reg_in.password),
+            full_name=reg_in.full_name,
+            phone=reg_in.phone,
+            delivery_address=reg_in.delivery_address,
+            is_active=True,
+            is_verified=False,
+            otp_code=otp_code,
+            otp_expires_at=otp_expiry
+        )
+        db.add(customer)
+
+    await db.commit()
+    await db.refresh(customer)
+
+    # Send OTP email
+    await send_otp_email(customer.email, otp_code, customer.full_name)
+
+    return CustomerRegisterResponse(
+        requires_verification=True,
+        email=customer.email,
+        message=f"A 6-digit verification code has been sent to {customer.email}.",
+        debug_otp=otp_code
     )
-    db.add(customer)
+
+
+@router.post("/verify-otp", response_model=CustomerTokenResponse)
+async def verify_customer_otp(
+    verify_in: CustomerVerifyOTP,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify 6-digit email OTP and activate customer account."""
+    res = await db.execute(select(CustomerUser).where(CustomerUser.email == verify_in.email))
+    customer = res.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found. Please register first."
+        )
+
+    if customer.is_verified:
+        expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            subject=customer.id,
+            role="customer",
+            expires_delta=expires
+        )
+        return CustomerTokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            customer=CustomerOut.model_validate(customer)
+        )
+
+    clean_code = verify_in.otp_code.strip()
+    if not customer.otp_code or customer.otp_code.strip() != clean_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code. Please check your email and try again."
+        )
+
+    if is_otp_expired(customer.otp_expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please click 'Resend Code'."
+        )
+
+    customer.is_verified = True
+    customer.otp_code = None
+    customer.otp_expires_at = None
     await db.commit()
     await db.refresh(customer)
 
@@ -99,6 +192,41 @@ async def register_customer(
         access_token=access_token,
         token_type="bearer",
         customer=CustomerOut.model_validate(customer)
+    )
+
+
+@router.post("/resend-otp", response_model=CustomerResendOTPResponse)
+async def resend_customer_otp(
+    resend_in: CustomerResendOTP,
+    db: AsyncSession = Depends(get_db)
+):
+    """Resend a fresh verification code to the customer email."""
+    res = await db.execute(select(CustomerUser).where(CustomerUser.email == resend_in.email))
+    customer = res.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account with this email does not exist."
+        )
+
+    if customer.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account is already verified. You can sign in directly."
+        )
+
+    otp_code = generate_otp_code()
+    customer.otp_code = otp_code
+    customer.otp_expires_at = get_otp_expiry()
+    await db.commit()
+
+    await send_otp_email(customer.email, otp_code, customer.full_name)
+
+    return CustomerResendOTPResponse(
+        success=True,
+        message=f"A fresh verification code has been sent to {customer.email}.",
+        debug_otp=otp_code
     )
 
 
@@ -121,6 +249,19 @@ async def login_customer(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account is deactivated"
+        )
+
+    if not customer.is_verified:
+        # Resend code automatically so customer can verify right now
+        otp_code = generate_otp_code()
+        customer.otp_code = otp_code
+        customer.otp_expires_at = get_otp_expiry()
+        await db.commit()
+        await send_otp_email(customer.email, otp_code, customer.full_name)
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"EMAIL_NOT_VERIFIED: Your account is not verified yet. A verification code has been sent to {customer.email}."
         )
 
     expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

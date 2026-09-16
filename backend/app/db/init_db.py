@@ -8,15 +8,33 @@ from app.models.user import AdminUser
 from app.models.table import RestaurantTable
 from app.models.menu import Category, MenuItem
 from app.models.order import Order, OrderItem
+from app.models.notification import StaffNotification
 from app.core.security import get_password_hash
 
 logger = logging.getLogger("init_db")
 
 
 async def init_models():
-    """Create all tables in the database."""
+    """Create all tables in the database and verify schema migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        def verify_customer_columns(sync_conn):
+            from sqlalchemy import text
+            try:
+                res = sync_conn.execute(text("PRAGMA table_info(customer_users)"))
+                cols = [row[1] for row in res.fetchall()]
+                if cols:
+                    if "is_verified" not in cols:
+                        sync_conn.execute(text("ALTER TABLE customer_users ADD COLUMN is_verified BOOLEAN DEFAULT 1 NOT NULL"))
+                    if "otp_code" not in cols:
+                        sync_conn.execute(text("ALTER TABLE customer_users ADD COLUMN otp_code VARCHAR(10)"))
+                    if "otp_expires_at" not in cols:
+                        sync_conn.execute(text("ALTER TABLE customer_users ADD COLUMN otp_expires_at DATETIME"))
+            except Exception as e:
+                logger.warning(f"Note on customer table columns check: {e}")
+
+        await conn.run_sync(verify_customer_columns)
     logger.info("Database tables verified and initialized.")
 
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useCart } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
-import { createOrder, updateCustomerProfile } from "@/lib/api";
+import { createOrder, updateCustomerProfile, validateTable } from "@/lib/api";
 import {
   X,
   Trash2,
@@ -22,7 +22,11 @@ import {
   Home,
   Utensils,
   CheckCircle2,
-  LogIn
+  LogIn,
+  ShoppingBag,
+  ArrowRight,
+  ShieldCheck,
+  Edit3
 } from "lucide-react";
 import { toast } from "sonner";
 import CustomerAuthModal from "@/components/auth/CustomerAuthModal";
@@ -30,9 +34,10 @@ import CustomerAuthModal from "@/components/auth/CustomerAuthModal";
 interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  onRescanTable?: () => void;
 }
 
-export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
+export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawerProps) {
   const router = useRouter();
   const {
     cart,
@@ -45,6 +50,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     setTip,
     total,
     tableSession,
+    setTableSession,
     orderType,
     setOrderType,
     customer,
@@ -58,6 +64,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     setDeliveryAddress,
     specialRequests,
     setSpecialRequests,
+    setActiveOrderId,
+    addActiveOrderId,
   } = useCart();
 
   const [paymentMethod, setPaymentMethod] = useState("mock_card");
@@ -82,6 +90,13 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     }
 
     if (isDelivery) {
+      if (!customer) {
+        setIsAuthModalOpen(true);
+        toast.info("Account Required for Delivery", {
+          description: "Please sign in or create an account to complete your delivery order.",
+        });
+        return;
+      }
       if (!customerName.trim()) {
         toast.error("Please enter your name for online delivery.");
         return;
@@ -96,8 +111,13 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       }
     } else {
       if (!tableSession) {
-        toast.error("Please select or scan a dining table, or switch to 'Order from Home'.");
-        return;
+        try {
+          const fallbackSession = await validateTable("1");
+          setTableSession(fallbackSession);
+        } catch {
+          toast.error("Please select a dining table or switch to Home Delivery.");
+          return;
+        }
       }
     }
 
@@ -105,8 +125,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     try {
       const orderPayload = {
         order_type: orderType,
-        table_id: isDelivery ? null : tableSession?.table_id,
-        session_token: isDelivery ? null : tableSession?.session_token,
+        table_id: isDelivery ? null : tableSession?.table_id || 1,
+        session_token: isDelivery ? null : tableSession?.session_token || null,
         customer_id: customer?.id || null,
         customer_name: customerName.trim() || (isDelivery ? "Customer" : "Guest"),
         customer_phone: customerPhone.trim() || undefined,
@@ -135,11 +155,19 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         }).catch(() => {});
       }
 
-      toast.success(
-        isDelivery
-          ? `Online Order #${createdOrder.order_number} received! Dispatched to kitchen & delivery.`
-          : `Order #${createdOrder.order_number} confirmed! Sent to kitchen.`
-      );
+      if (isDelivery) {
+        toast.success(`🛵 Delivery Order #${createdOrder.order_number} Confirmed!`, {
+          description: "Our kitchen has begun preparation. Courier will deliver fresh to your address.",
+          duration: 5500,
+        });
+      } else {
+        toast.success(`🍽️ Dine-In Order #${createdOrder.order_number} Confirmed!`, {
+          description: `Sent directly to kitchen. Dishes will be served to Table #${createdOrder.table_number || tableSession?.table_number || "1"}.`,
+          duration: 5500,
+        });
+      }
+      addActiveOrderId(createdOrder.id);
+      setActiveOrderId(createdOrder.id);
       clearCart();
       onClose();
       router.push(`/orders/${createdOrder.id}`);
@@ -152,104 +180,123 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm animate-in fade-in">
-        <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-          <div className="w-screen max-w-md bg-card border-l border-border shadow-2xl flex flex-col">
+      <div className="fixed inset-0 z-50 overflow-hidden bg-black/65 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="absolute inset-y-0 right-0 max-w-full flex w-full justify-end">
+          <div className="w-full sm:max-w-md bg-card border-l border-border/80 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-200">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-card/80 backdrop-blur-md sticky top-0 z-10">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-lg text-foreground">Your Order</h2>
-                  {isDelivery ? (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                      🏠 Home Delivery
-                    </span>
-                  ) : tableSession ? (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300">
-                      Table #{tableSession.table_number}
-                    </span>
-                  ) : (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
-                      🍽️ Dine-In
-                    </span>
-                  )}
+            <div className="p-4 sm:p-5 border-b border-border/80 flex items-center justify-between bg-card/90 backdrop-blur-md sticky top-0 z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-orange-600/10 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold">
+                  <ShoppingBag className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-muted-foreground">{cart.length} unique items in cart</p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-extrabold text-base sm:text-lg text-foreground tracking-tight">Your Order</h2>
+                    {isDelivery ? (
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300">
+                        🛵 Delivery
+                      </span>
+                    ) : tableSession ? (
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300">
+                        Table #{tableSession.table_number}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+                        🍽️ Dine-In
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{cart.length} item{cart.length !== 1 ? "s" : ""} selected</p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-2xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors shrink-0"
+                aria-label="Close cart"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Order Mode Switcher (Dine-In vs Order from Home) */}
-            <div className="px-4 pt-3 pb-1 border-b border-border/70 bg-secondary/20">
-              <span className="block text-[11px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                Ordering For:
-              </span>
-              <div className="grid grid-cols-2 gap-2 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setOrderType("delivery")}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
-                    isDelivery
-                      ? "bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20"
-                      : "bg-card border-border text-foreground hover:bg-secondary"
-                  }`}
-                >
-                  <Home className="w-3.5 h-3.5" />
-                  <span>Order from Home</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setOrderType("dine_in")}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
-                    !isDelivery
-                      ? "bg-orange-600 text-white border-orange-600 shadow-sm shadow-orange-600/20"
-                      : "bg-card border-border text-foreground hover:bg-secondary"
-                  }`}
-                >
-                  <Utensils className="w-3.5 h-3.5" />
-                  <span>Dine-In at Shop</span>
-                </button>
+            {/* Dining Mode Banner */}
+            {isDelivery ? (
+              <div className="mx-3.5 sm:mx-4 mt-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Home className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-blue-950 dark:text-blue-200">
+                      Online Delivery Order
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground block truncate">
+                    Dishes will be delivered fresh to your address
+                  </span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mx-3.5 sm:mx-4 mt-3 p-3 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center gap-3 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                  <QrCode className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-orange-950 dark:text-orange-200">
+                      Table #{tableSession?.table_number || "1"}
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground block truncate">
+                    Food will be served directly to this table
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Cart Item List */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-3.5">
               {cart.length === 0 ? (
-                <div className="h-64 flex flex-col items-center justify-center text-center text-muted-foreground">
-                  <span className="text-4xl mb-2">🍽️</span>
-                  <p className="font-semibold text-sm">Your order is empty</p>
-                  <p className="text-xs mt-1">Explore our menu and add something delicious!</p>
+                <div className="h-64 flex flex-col items-center justify-center text-center text-muted-foreground px-4">
+                  <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center mb-3">
+                    <ShoppingBag className="w-8 h-8 opacity-40 text-foreground" />
+                  </div>
+                  <p className="font-extrabold text-sm text-foreground">Your order is empty</p>
+                  <p className="text-xs mt-1 text-muted-foreground max-w-xs">
+                    Explore our menu and add your favorite dishes to begin!
+                  </p>
                 </div>
               ) : (
                 <>
                   {cart.map((item) => (
                     <div
                       key={item.cart_id}
-                      className="flex gap-3 bg-secondary/30 rounded-2xl p-3 border border-border/70 items-center"
+                      className="flex gap-3 bg-secondary/30 rounded-2xl p-3 border border-border/80 items-center transition-all hover:border-orange-500/30"
                     >
-                      {item.menu_item.image_url && (
-                        <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-stone-100 dark:bg-stone-900">
+                      {item.menu_item.image_url ? (
+                        <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-xl overflow-hidden shrink-0 bg-stone-100 dark:bg-stone-900 border border-border/50">
                           <Image
                             src={item.menu_item.image_url}
                             alt={item.menu_item.name}
                             fill
                             className="object-cover"
-                            sizes="64px"
+                            sizes="72px"
                           />
                         </div>
+                      ) : (
+                        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-secondary flex items-center justify-center shrink-0 border border-border/50 text-muted-foreground">
+                          <Utensils className="w-5 h-5 opacity-40" />
+                        </div>
                       )}
+
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="font-semibold text-xs text-foreground truncate">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-xs sm:text-sm text-foreground truncate">
                             {item.menu_item.name}
                           </h4>
-                          <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
+                          <span className="text-xs sm:text-sm font-extrabold text-orange-600 dark:text-orange-400 shrink-0">
                             {formatCurrency(item.total_price)}
                           </span>
                         </div>
@@ -265,7 +312,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                               return (
                                 <span
                                   key={k}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100/70 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 font-medium"
+                                  className="text-[10px] px-1.5 py-0.2 rounded-md bg-orange-100/80 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 font-medium truncate max-w-[200px]"
                                 >
                                   {text}
                                 </span>
@@ -275,20 +322,31 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         )}
 
                         {/* Quantity Controls */}
-                        <div className="flex items-center gap-3 mt-2.5">
-                          <div className="flex items-center border border-border rounded-lg bg-card">
+                        <div className="flex items-center justify-between gap-2 mt-2.5">
+                          <div className="flex items-center border border-border/80 rounded-xl bg-card shadow-2xs">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.cart_id, -1)}
-                              className="p-1 hover:bg-secondary rounded-l-lg text-muted-foreground hover:text-foreground"
+                              className="p-1.5 hover:bg-secondary rounded-l-xl text-muted-foreground hover:text-foreground active:scale-90 transition-all"
+                              aria-label="Decrease quantity"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-                            <span className="px-2 text-xs font-bold">{item.quantity}</span>
+                            <span className="px-2.5 text-xs font-bold min-w-[24px] text-center">{item.quantity}</span>
                             <button
                               type="button"
-                              onClick={() => updateQuantity(item.cart_id, 1)}
-                              className="p-1 hover:bg-secondary rounded-r-lg text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                if (isDelivery && !customer) {
+                                  setIsAuthModalOpen(true);
+                                  toast.info("Account Required for Delivery", {
+                                    description: "Please sign in or create an account to order food delivery.",
+                                  });
+                                  return;
+                                }
+                                updateQuantity(item.cart_id, 1);
+                              }}
+                              className="p-1.5 hover:bg-secondary rounded-r-xl text-muted-foreground hover:text-foreground active:scale-90 transition-all"
+                              aria-label="Increase quantity"
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -297,7 +355,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                           <button
                             type="button"
                             onClick={() => removeFromCart(item.cart_id)}
-                            className="text-[11px] text-muted-foreground hover:text-rose-600 p-1"
+                            className="text-[11px] text-muted-foreground hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                            aria-label="Remove item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -307,24 +366,24 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   ))}
 
                   {/* Customer Account Banner */}
-                  <div className="p-3 rounded-2xl bg-secondary/50 border border-border/80 flex items-center justify-between">
+                  <div className="p-3 rounded-2xl bg-secondary/50 border border-border/80 flex items-center justify-between gap-2">
                     {customer ? (
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                           <CheckCircle2 className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold truncate text-foreground">
-                            Logged in as {customer.full_name}
+                            {customer.full_name}
                           </p>
                           <p className="text-[10px] text-muted-foreground truncate">
-                            Saved phone & address loaded
+                            Saved delivery details loaded
                           </p>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-600 flex items-center justify-center font-bold text-xs shrink-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-600 flex items-center justify-center font-bold text-xs shrink-0">
                           <User className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
@@ -343,10 +402,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   </div>
 
                   {/* Customer Details Form */}
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-3 pt-1">
                     <div>
                       <label className="block text-xs font-semibold text-foreground mb-1">
-                        {isDelivery ? "Your Name *" : "Guest Name (Optional)"}
+                        {isDelivery ? "Your Full Name *" : "Guest Name (Optional)"}
                       </label>
                       <div className="relative">
                         <User className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
@@ -356,7 +415,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                           placeholder="e.g. Alex Johnson"
                           value={customerName}
                           onChange={(e) => setCustomerName(e.target.value)}
-                          className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-orange-500/50"
+                          autoComplete="name"
+                          className="w-full pl-8 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/40"
                         />
                       </div>
                     </div>
@@ -366,17 +426,19 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       <>
                         <div>
                           <label className="block text-xs font-semibold text-foreground mb-1">
-                            Phone Number * (for delivery driver)
+                            Phone Number * (for delivery courier)
                           </label>
                           <div className="relative">
                             <Phone className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                             <input
                               type="tel"
                               required
+                              inputMode="tel"
+                              autoComplete="tel"
                               placeholder="e.g. +1 555-0199"
                               value={customerPhone}
                               onChange={(e) => setCustomerPhone(e.target.value)}
-                              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-orange-500/50"
+                              className="w-full pl-8 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/40"
                             />
                           </div>
                         </div>
@@ -390,10 +452,11 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             <textarea
                               rows={2}
                               required
-                              placeholder="House/Apt #, Street, City, Landmark"
+                              autoComplete="street-address"
+                              placeholder="Building/Apt #, Street, District, Landmark"
                               value={deliveryAddress}
                               onChange={(e) => setDeliveryAddress(e.target.value)}
-                              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-orange-500/50 resize-none"
+                              className="w-full pl-8 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/40 resize-none"
                             />
                           </div>
                         </div>
@@ -409,14 +472,14 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         placeholder="e.g. Please ring doorbell"
                         value={specialRequests}
                         onChange={(e) => setSpecialRequests(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-orange-500/50"
+                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/40"
                       />
                     </div>
                   </div>
 
                   {/* Tip Selector */}
                   <div className="pt-3 border-t border-border/70">
-                    <span className="block text-xs font-semibold text-foreground mb-1.5">
+                    <span className="block text-xs font-semibold text-foreground mb-2">
                       Tip the Kitchen & {isDelivery ? "Driver" : "Staff"}
                     </span>
                     <div className="grid grid-cols-4 gap-2">
@@ -428,9 +491,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             key={opt.label}
                             type="button"
                             onClick={() => setTip(amount)}
-                            className={`py-1.5 px-2 rounded-xl text-center text-xs font-semibold border transition-all ${
+                            className={`py-2 px-1 rounded-xl text-center text-xs font-bold border transition-all ${
                               isSelected
-                                ? "bg-orange-600 text-white border-orange-600 shadow-sm"
+                                ? "bg-orange-600 text-white border-orange-600 shadow-sm shadow-orange-600/30 scale-102"
                                 : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                             }`}
                           >
@@ -443,16 +506,16 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                   {/* Payment Method Selector */}
                   <div className="pt-3 border-t border-border/70">
-                    <span className="block text-xs font-semibold text-foreground mb-1.5">
+                    <span className="block text-xs font-semibold text-foreground mb-2">
                       Payment Method
                     </span>
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => setPaymentMethod("mock_card")}
-                        className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
                           paymentMethod === "mock_card"
-                            ? "bg-orange-50 border-orange-500 text-orange-950 dark:bg-orange-950/40 dark:text-orange-200 shadow-sm"
+                            ? "bg-orange-500/10 border-orange-500 text-orange-950 dark:text-orange-200 shadow-sm ring-1 ring-orange-500/40"
                             : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                         }`}
                       >
@@ -463,9 +526,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       <button
                         type="button"
                         onClick={() => setPaymentMethod("aba_pay")}
-                        className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
                           paymentMethod === "aba_pay"
-                            ? "bg-orange-50 border-orange-500 text-orange-950 dark:bg-orange-950/40 dark:text-orange-200 shadow-sm"
+                            ? "bg-blue-500/10 border-blue-500 text-blue-950 dark:text-blue-200 shadow-sm ring-1 ring-blue-500/40"
                             : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                         }`}
                       >
@@ -476,15 +539,15 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       <button
                         type="button"
                         onClick={() => setPaymentMethod(isDelivery ? "cash_on_delivery" : "cash")}
-                        className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
                           paymentMethod === "cash" || paymentMethod === "cash_on_delivery"
-                            ? "bg-orange-50 border-orange-500 text-orange-950 dark:bg-orange-950/40 dark:text-orange-200 shadow-sm"
+                            ? "bg-emerald-500/10 border-emerald-500 text-emerald-950 dark:text-emerald-200 shadow-sm ring-1 ring-emerald-500/40"
                             : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                         }`}
                       >
                         <Banknote className="w-4 h-4 text-emerald-600" />
                         <span className="text-[10px] font-bold">
-                          {isDelivery ? "Cash on Delivery" : "Pay at Counter"}
+                          {isDelivery ? "Cash Delivery" : "At Counter"}
                         </span>
                       </button>
                     </div>
@@ -495,7 +558,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
             {/* Checkout Footer */}
             {cart.length > 0 && (
-              <div className="p-4 sm:p-5 border-t border-border bg-card/90 backdrop-blur-md space-y-3">
+              <div className="p-4 sm:p-5 border-t border-border/80 bg-card/95 backdrop-blur-md space-y-3 pb-safe">
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
@@ -511,7 +574,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       <span>{formatCurrency(tip)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-base font-extrabold text-foreground pt-1.5 border-t border-border">
+                  <div className="flex justify-between text-base font-extrabold text-foreground pt-1.5 border-t border-border/80">
                     <span>Total Amount</span>
                     <span className="text-orange-600 dark:text-orange-400">{formatCurrency(total)}</span>
                   </div>
@@ -520,7 +583,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 <button
                   onClick={handleCheckout}
                   disabled={isSubmitting}
-                  className="w-full py-3.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-[0.98] transition-all disabled:opacity-50"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <>
@@ -546,6 +609,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       <CustomerAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        message="Please sign in or create an account to order food delivery."
       />
     </>
   );

@@ -8,6 +8,7 @@ from app.models.table import RestaurantTable
 from app.schemas.table import (
     TableOut, TableCreate, TableUpdate, TableSessionResponse, TableValidateRequest
 )
+from app.schemas.order import OrderOut
 from app.core.security import create_table_session_token, verify_table_session_token
 from app.core.config import settings
 from app.api.deps import get_current_admin
@@ -146,3 +147,38 @@ async def get_table_qr_code(
         "target_url": target_url,
         "qr_image_base64": qr_b64
     }
+
+
+@router.get("/{table_identifier}/active-orders", response_model=List[OrderOut])
+async def get_table_active_orders(
+    table_identifier: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns all currently active (unserved / in-progress) orders for a table."""
+    stmt = select(RestaurantTable).where(
+        or_(
+            RestaurantTable.table_number == table_identifier,
+            RestaurantTable.id == (int(table_identifier) if table_identifier.isdigit() else -1)
+        )
+    )
+    result = await db.execute(stmt)
+    table = result.scalar_one_or_none()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    from app.models.order import Order
+    from sqlalchemy.orm import selectinload
+    from app.api.v1.orders import format_order_response
+
+    order_stmt = (
+        select(Order)
+        .where(
+            Order.table_id == table.id,
+            Order.status.in_(["pending", "confirmed", "preparing", "ready"])
+        )
+        .options(selectinload(Order.items), selectinload(Order.table))
+        .order_by(Order.created_at.desc())
+    )
+    res = await db.execute(order_stmt)
+    orders = res.scalars().all()
+    return [format_order_response(o) for o in orders]

@@ -38,6 +38,12 @@ interface CartContextType {
   setDeliveryAddress: (address: string) => void;
   specialRequests: string;
   setSpecialRequests: (req: string) => void;
+  // Active Orders Tracking
+  activeOrderId: number | null;
+  setActiveOrderId: (id: number | null) => void;
+  activeOrderIds: number[];
+  addActiveOrderId: (id: number) => void;
+  removeActiveOrderId: (id: number) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -53,10 +59,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [customerPhone, setCustomerPhoneState] = useState<string>("");
   const [deliveryAddress, setDeliveryAddressState] = useState<string>("");
   const [specialRequests, setSpecialRequests] = useState<string>("");
+  const [activeOrderId, setActiveOrderIdState] = useState<number | null>(null);
+  const [activeOrderIds, setActiveOrderIdsState] = useState<number[]>([]);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
     try {
+      const savedActiveOrderIds = localStorage.getItem("food_active_order_ids");
+      if (savedActiveOrderIds) {
+        try {
+          const parsed = JSON.parse(savedActiveOrderIds);
+          if (Array.isArray(parsed)) {
+            setActiveOrderIdsState(parsed);
+            if (parsed.length > 0) setActiveOrderIdState(parsed[0]);
+          }
+        } catch {}
+      } else {
+        const savedActiveOrderId = localStorage.getItem("food_active_order_id");
+        if (savedActiveOrderId) {
+          const num = Number(savedActiveOrderId);
+          setActiveOrderIdState(num);
+          setActiveOrderIdsState([num]);
+        }
+      }
+
       const savedTable = localStorage.getItem("food_table_session");
       if (savedTable) setTableSessionState(JSON.parse(savedTable));
 
@@ -160,6 +186,39 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const handleSetAddress = useCallback((address: string) => {
     setDeliveryAddressState(address);
     localStorage.setItem("food_delivery_address", address);
+  }, []);
+
+  const setActiveOrderId = useCallback((id: number | null) => {
+    setActiveOrderIdState(id);
+    if (id) {
+      localStorage.setItem("food_active_order_id", String(id));
+    } else {
+      localStorage.removeItem("food_active_order_id");
+    }
+  }, []);
+
+  const addActiveOrderId = useCallback((id: number) => {
+    setActiveOrderIdState(id);
+    localStorage.setItem("food_active_order_id", String(id));
+    setActiveOrderIdsState((prev) => {
+      const updated = [id, ...prev.filter((x) => x !== id)];
+      localStorage.setItem("food_active_order_ids", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const removeActiveOrderId = useCallback((id: number) => {
+    setActiveOrderIdsState((prev) => {
+      const updated = prev.filter((x) => x !== id);
+      localStorage.setItem("food_active_order_ids", JSON.stringify(updated));
+      return updated;
+    });
+    setActiveOrderIdState((prevCurrent) => {
+      if (prevCurrent === id) {
+        return null;
+      }
+      return prevCurrent;
+    });
   }, []);
 
   const addToCart = (
@@ -271,7 +330,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         deliveryAddress,
         setDeliveryAddress: handleSetAddress,
         specialRequests,
-        setSpecialRequests
+        setSpecialRequests,
+        activeOrderId,
+        setActiveOrderId,
+        activeOrderIds,
+        addActiveOrderId,
+        removeActiveOrderId
       }}
     >
       {children}

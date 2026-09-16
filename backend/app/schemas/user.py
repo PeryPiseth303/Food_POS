@@ -57,10 +57,33 @@ class CustomerOut(BaseModel):
     full_name: str
     phone: Optional[str] = None
     delivery_address: Optional[str] = None
+    is_verified: bool = False
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CustomerRegisterResponse(BaseModel):
+    requires_verification: bool = True
+    email: str
+    message: str
+    debug_otp: Optional[str] = None
+
+
+class CustomerVerifyOTP(BaseModel):
+    email: EmailStr
+    otp_code: str
+
+
+class CustomerResendOTP(BaseModel):
+    email: EmailStr
+
+
+class CustomerResendOTPResponse(BaseModel):
+    success: bool = True
+    message: str
+    debug_otp: Optional[str] = None
 
 
 class CustomerTokenResponse(BaseModel):
