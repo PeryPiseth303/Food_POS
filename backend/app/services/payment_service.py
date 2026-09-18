@@ -221,7 +221,6 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
                 req_time = datetime.now().strftime("%Y%m%d%H%M%S")
                 aba_id_key = settings.ABA_PAY_KEY_ID.strip()
                 usd_acc = settings.ABA_PAY_USD_ACC.strip()
-                khr_acc = (settings.ABA_PAY_KHR_ACC or "").strip()
                 amt_str = f"{amount_usd:g}"
                 raw_hash_input = f"{req_time}{aba_id_key}{amt_str}{usd_acc}"
                 h = hashlib.sha512(raw_hash_input.encode("utf-8")).hexdigest()
@@ -230,7 +229,6 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
                     "amount": amount_usd,
                     "aba_account": usd_acc,
                     "aba_account_usd": usd_acc,
-                    "aba_account_khr": khr_acc,
                     "currency": "USD",
                     "ccy": "USD",
                     "req_time": req_time,
@@ -318,8 +316,8 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
         if settings.ABA_PAY_KEY_ID and settings.ABA_PAY_CODE:
             deeplink = (
                 f"abamobilebank://ababank.com?type=p2p&id={settings.ABA_PAY_KEY_ID}"
-                f"&code={settings.ABA_PAY_CODE}&acc={settings.ABA_PAY_KHR_ACC or ''}"
-                f"&usdAcc={settings.ABA_PAY_USD_ACC or ''}&khrAcc={settings.ABA_PAY_KHR_ACC or ''}"
+                f"&code={settings.ABA_PAY_CODE}&acc={settings.ABA_PAY_USD_ACC or ''}"
+                f"&usdAcc={settings.ABA_PAY_USD_ACC or ''}"
                 f"&amount={amount_usd:.2f}"
             )
         elif aba_payment_link:
