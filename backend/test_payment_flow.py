@@ -39,7 +39,7 @@ async def test_full_payment_flow():
         assert pay_data["amount_usd"] == float(order.total_amount)
         assert pay_data["amount_khr"] > 0
         assert pay_data["qr_string"].startswith("000201"), "QR string must be authentic EMVCo KHQR format starting with 000201"
-        assert pay_data["provider"] in ("khqr_bakong", "aba_payway_live", "aba_pay_emvco", "aba_payway")
+        assert pay_data["provider"] in ("aba_pay_p2p", "khqr_bakong", "aba_payway_live", "aba_pay_emvco", "aba_payway")
         assert pay_data["aba_payment_link"] is not None
         assert "link.payway.com.kh" in pay_data["aba_payment_link"]
         print(f"ABA PayWay payment data successfully generated: provider={pay_data['provider']}")

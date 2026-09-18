@@ -215,50 +215,95 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
 
     # 2. ABA Pay / Bakong KHQR Scannable QR
     if not qr_string:
-        routing_acc = (
-            getattr(settings, "ABA_PAY_ACCOUNT_ID", None)
-            or (f"{settings.ABA_PAY_USD_ACC.strip()}@aba" if settings.ABA_PAY_USD_ACC else "")
-        ).strip()
-        merchant_name = settings.ABA_PAYWAY_MERCHANT_NAME or settings.RESTAURANT_NAME or "Bistro Moderne"
-        merchant_city = settings.ABA_PAYWAY_MERCHANT_CITY or "Phnom Penh"
-
-        # Determine recipient account identifier for NBC Bakong KHQR
-        is_placeholder = (not routing_acc) or (routing_acc.lower() in ("merchant@aba", "@aba"))
-        if is_placeholder:
-            routing_acc = f"{settings.ABA_PAY_USD_ACC.strip()}@aba" if settings.ABA_PAY_USD_ACC else "2809299@aba"
-
-        if "@" not in routing_acc:
-            routing_acc = f"{routing_acc}@aba"
-
-        # Generate official NBC Bakong KHQR code (scannable by ABA Mobile and all Bakong banks)
-        try:
-            from bakong_khqr import KHQR
-            k = KHQR()
-            qr_string = k.create_qr(
-                account_id=routing_acc,
-                merchant_name=merchant_name,
-                merchant_city=merchant_city,
-                amount=amount_usd,
-                currency="USD",
-                bill_number=transaction_id,
-                expiration=1,
-            )
+        # First priority: Authentic ABA Bank official P2P KHQR service
+        if settings.ABA_PAY_KEY_ID and settings.ABA_PAY_USD_ACC:
             try:
-                qr_image = k.qr_image(qr_string, format="base64_uri")
-            except Exception:
-                qr_image = generate_qr_image_data_uri(qr_string)
-            provider_used = "khqr_bakong"
-        except Exception as b_err:
-            logger.warning(f"bakong_khqr failed ({b_err}); using custom EMVCo builder.")
-            qr_string = build_aba_pay_qr_string(
-                account_id=routing_acc,
-                merchant_name=merchant_name,
-                merchant_city=merchant_city,
-                amount=amount_usd,
-                bill_number=transaction_id,
-                currency="USD",
-            )
-            provider_used = "aba_pay_emvco"
+                req_time = datetime.now().strftime("%Y%m%d%H%M%S")
+                aba_id_key = settings.ABA_PAY_KEY_ID.strip()
+                usd_acc = settings.ABA_PAY_USD_ACC.strip()
+                khr_acc = (settings.ABA_PAY_KHR_ACC or "").strip()
+                amt_str = f"{amount_usd:g}"
+                raw_hash_input = f"{req_time}{aba_id_key}{amt_str}{usd_acc}"
+                h = hashlib.sha512(raw_hash_input.encode("utf-8")).hexdigest()
+                payload = {
+                    "aba_id_key": aba_id_key,
+                    "amount": amount_usd,
+                    "aba_account": usd_acc,
+                    "aba_account_usd": usd_acc,
+                    "aba_account_khr": khr_acc,
+                    "req_time": req_time,
+                    "hash": h,
+                }
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/plain, */*",
+                    "Origin": "https://link.payway.com.kh",
+                    "Referer": "https://link.payway.com.kh/",
+                }
+                async with httpx.AsyncClient(timeout=6.0) as http_client:
+                    resp = await http_client.post(
+                        "https://pwapp.ababank.com/api/mobile-service/v1/aba-qr",
+                        json=payload,
+                        headers=headers,
+                    )
+                    if resp.status_code == 200:
+                        resp_data = resp.json()
+                        status_code = resp_data.get("status", {}).get("code")
+                        if status_code in ("00", "0", 0) and "data" in resp_data:
+                            qr_string = resp_data["data"].get("qr", "")
+                            provider_used = "aba_pay_p2p"
+                            logger.info(
+                                f"Successfully generated official ABA P2P KHQR for order #{order.order_number} "
+                                f"(Recipient: {resp_data['data'].get('qr_name')}, Acc: {resp_data['data'].get('acc')})"
+                            )
+            except Exception as p2p_err:
+                logger.warning(f"Official ABA P2P KHQR generation skipped ({p2p_err}); falling back.")
+
+        # Second priority: NBC Bakong KHQR generator fallback
+        if not qr_string:
+            routing_acc = (
+                getattr(settings, "ABA_PAY_ACCOUNT_ID", None)
+                or (f"{settings.ABA_PAY_USD_ACC.strip()}@aba" if settings.ABA_PAY_USD_ACC else "")
+            ).strip()
+            merchant_name = settings.ABA_PAYWAY_MERCHANT_NAME or settings.RESTAURANT_NAME or "Bistro Moderne"
+            merchant_city = settings.ABA_PAYWAY_MERCHANT_CITY or "Phnom Penh"
+
+            is_placeholder = (not routing_acc) or (routing_acc.lower() in ("merchant@aba", "@aba"))
+            if is_placeholder:
+                routing_acc = f"{settings.ABA_PAY_USD_ACC.strip()}@aba" if settings.ABA_PAY_USD_ACC else "2809299@aba"
+
+            if "@" not in routing_acc:
+                routing_acc = f"{routing_acc}@aba"
+
+            try:
+                from bakong_khqr import KHQR
+                k = KHQR()
+                qr_string = k.create_qr(
+                    account_id=routing_acc,
+                    merchant_name=merchant_name,
+                    merchant_city=merchant_city,
+                    amount=amount_usd,
+                    currency="USD",
+                    bill_number=transaction_id,
+                    expiration=1,
+                )
+                try:
+                    qr_image = k.qr_image(qr_string, format="base64_uri")
+                except Exception:
+                    qr_image = generate_qr_image_data_uri(qr_string)
+                provider_used = "khqr_bakong"
+            except Exception as b_err:
+                logger.warning(f"bakong_khqr failed ({b_err}); using custom EMVCo builder.")
+                qr_string = build_aba_pay_qr_string(
+                    account_id=routing_acc,
+                    merchant_name=merchant_name,
+                    merchant_city=merchant_city,
+                    amount=amount_usd,
+                    bill_number=transaction_id,
+                    currency="USD",
+                )
+                provider_used = "aba_pay_emvco"
 
         order.payment_intent_id = hashlib.md5(qr_string.encode("utf-8")).hexdigest()
     else:
@@ -268,7 +313,14 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
         qr_image = generate_qr_image_data_uri(qr_string)
 
     if not deeplink:
-        if aba_payment_link:
+        if settings.ABA_PAY_KEY_ID and settings.ABA_PAY_CODE:
+            deeplink = (
+                f"abamobilebank://ababank.com?type=p2p&id={settings.ABA_PAY_KEY_ID}"
+                f"&code={settings.ABA_PAY_CODE}&acc={settings.ABA_PAY_KHR_ACC or ''}"
+                f"&usdAcc={settings.ABA_PAY_USD_ACC or ''}&khrAcc={settings.ABA_PAY_KHR_ACC or ''}"
+                f"&amount={amount_usd:.2f}"
+            )
+        elif aba_payment_link:
             deeplink = aba_payment_link
         else:
             deeplink = f"abamobilebank://pay?qr={qr_string}"

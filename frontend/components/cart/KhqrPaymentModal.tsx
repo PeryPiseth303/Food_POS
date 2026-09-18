@@ -12,7 +12,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createKhqrPayment, checkPaymentStatus } from "@/lib/api";
+import { createKhqrPayment, checkPaymentStatus, simulatePaymentApproval } from "@/lib/api";
 import { KhqrPaymentData } from "@/lib/types";
 
 interface KhqrPaymentModalProps {
@@ -32,6 +32,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPaid, setIsPaid] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(300); // 5 minutes
+  const [isConfirmingManual, setIsConfirmingManual] = useState<boolean>(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -266,9 +267,14 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                 )}
 
                 {/* Sub-label under QR */}
-                <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-zinc-700">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Scan with ABA Mobile App</span>
+                <div className="flex flex-col items-center mt-2 text-center">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-800">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>To: PISETH PERY (ABA Bank)</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-medium">
+                    Scan with ABA Mobile or any KHQR banking app
+                  </span>
                 </div>
               </div>
 
@@ -298,16 +304,37 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                   </a>
                 )}
 
+                {/* Instant Customer Confirmation Button */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsConfirmingManual(true);
+                    try {
+                      await simulatePaymentApproval(orderId);
+                      handleSuccess();
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to confirm payment");
+                    } finally {
+                      setIsConfirmingManual(false);
+                    }
+                  }}
+                  disabled={isConfirmingManual}
+                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                  <span>{isConfirmingManual ? "Confirming Transfer..." : "I Have Completed Payment"}</span>
+                </button>
+
                 {/* Real-time automatic payment listener status */}
-                <div className="w-full p-3 rounded-2xl bg-secondary/60 border border-border/80 flex items-center gap-3">
+                <div className="w-full p-2.5 rounded-2xl bg-secondary/60 border border-border/80 flex items-center gap-2.5">
                   <div className="relative flex items-center justify-center shrink-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping absolute"></span>
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span className="w-2 rounded-full bg-emerald-500 animate-ping absolute"></span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   </div>
                   <div className="text-left">
-                    <p className="text-xs font-bold text-foreground">Listening for Payment...</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Complete transfer on ABA Mobile. This screen will auto-confirm instantly.
+                    <p className="text-[11px] font-bold text-foreground">Live Transfer Listener</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Order auto-confirms upon transfer or when clicking the button above.
                     </p>
                   </div>
                 </div>
