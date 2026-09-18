@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     ABA_PAY_KHR_ACC: str = os.getenv("ABA_PAY_KHR_ACC", "")
 
     # ABA PayWay Payment Gateway (Official Method A)
-    ABA_PAYWAY_BASE_URL: str = os.getenv("ABA_PAYWAY_BASE_URL", "https://checkout-sandbox.payway.com.kh")
+    ABA_PAYWAY_BASE_URL: str = os.getenv("ABA_PAYWAY_BASE_URL", "https://checkout.payway.com.kh")
     ABA_PAYWAY_MERCHANT_ID: str = os.getenv("ABA_PAYWAY_MERCHANT_ID", "")
     ABA_PAYWAY_API_KEY: str = os.getenv("ABA_PAYWAY_API_KEY", "")
     ABA_PAYWAY_MERCHANT_NAME: str = os.getenv("ABA_PAYWAY_MERCHANT_NAME", "Bistro Moderne")
