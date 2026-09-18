@@ -439,26 +439,12 @@ async def verify_order_payment(order_id: int, db: AsyncSession, transaction_id: 
                         resp_data = resp_json.get("data", {}) if isinstance(resp_json.get("data"), dict) else {}
                         payment_status = str(resp_data.get("payment_status", "")).upper()
 
-                        if status_code in (0, "0", "00") or payment_status in ("APPROVED", "PAID", "SUCCESS", "COMPLETED"):
+                        if payment_status in ("APPROVED", "PAID", "SUCCESS", "COMPLETED"):
                             is_confirmed = True
                             logger.info(f"ABA PayWay REST API confirmed payment for order #{order.order_number}")
             except Exception as err:
                 logger.debug(f"ABA PayWay REST API check: {err}")
 
-    # 2. Automatic payment detection in development mode (enabled when AUTO_CONFIRM_PAYMENT_SECONDS > 0)
-    if not is_confirmed and settings.AUTO_CONFIRM_PAYMENT_SECONDS > 0:
-        initiated_at = ORDER_PAYMENT_INITIATED.get(order.id)
-        if not initiated_at:
-            ORDER_PAYMENT_INITIATED[order.id] = time.time()
-            initiated_at = ORDER_PAYMENT_INITIATED[order.id]
-
-        elapsed = time.time() - initiated_at
-        if elapsed >= settings.AUTO_CONFIRM_PAYMENT_SECONDS:
-            is_confirmed = True
-            logger.info(
-                f"Auto-confirmed payment for order #{order.order_number} "
-                f"after {elapsed:.1f}s scanning duration (dev auto-confirm)."
-            )
 
     if is_confirmed:
         await mark_order_as_paid(order, db, provider="aba_payway")
