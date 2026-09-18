@@ -222,42 +222,36 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
         merchant_name = settings.ABA_PAYWAY_MERCHANT_NAME or settings.RESTAURANT_NAME or "Bistro Moderne"
         merchant_city = settings.ABA_PAYWAY_MERCHANT_CITY or "Phnom Penh"
 
-        # Check if routing_acc is a placeholder
-        is_placeholder = (not routing_acc) or (routing_acc in ("2809299@aba", "merchant@aba", "@aba"))
+        # Determine recipient account identifier for NBC Bakong KHQR
+        is_placeholder = (not routing_acc) or (routing_acc.lower() in ("merchant@aba", "@aba"))
+        if is_placeholder:
+            routing_acc = f"{settings.ABA_PAY_USD_ACC.strip()}@aba" if settings.ABA_PAY_USD_ACC else "2809299@aba"
 
-        if not is_placeholder and "@" in routing_acc:
-            # Generate official NBC Bakong KHQR code
+        if "@" not in routing_acc:
+            routing_acc = f"{routing_acc}@aba"
+
+        # Generate official NBC Bakong KHQR code (scannable by ABA Mobile and all Bakong banks)
+        try:
+            from bakong_khqr import KHQR
+            k = KHQR()
+            qr_string = k.create_qr(
+                account_id=routing_acc,
+                merchant_name=merchant_name,
+                merchant_city=merchant_city,
+                amount=amount_usd,
+                currency="USD",
+                bill_number=transaction_id,
+                expiration=1,
+            )
             try:
-                from bakong_khqr import KHQR
-                k = KHQR()
-                qr_string = k.create_qr(
-                    account_id=routing_acc,
-                    merchant_name=merchant_name,
-                    merchant_city=merchant_city,
-                    amount=amount_usd,
-                    currency="USD",
-                    bill_number=transaction_id,
-                    expiration=15
-                )
-                provider_used = "khqr_bakong"
-            except Exception as b_err:
-                logger.warning(f"bakong_khqr failed ({b_err}); using custom EMVCo builder.")
-                qr_string = build_aba_pay_qr_string(
-                    account_id=routing_acc,
-                    merchant_name=merchant_name,
-                    merchant_city=merchant_city,
-                    amount=amount_usd,
-                    bill_number=transaction_id,
-                    currency="USD",
-                )
-                provider_used = "aba_pay_emvco"
-        elif aba_payment_link:
-            # If no valid Bakong ID yet, encode direct ABA Mobile payment link into QR code
-            qr_string = aba_payment_link
-            provider_used = "aba_payway_link"
-        else:
+                qr_image = k.qr_image(qr_string, format="base64_uri")
+            except Exception:
+                qr_image = generate_qr_image_data_uri(qr_string)
+            provider_used = "khqr_bakong"
+        except Exception as b_err:
+            logger.warning(f"bakong_khqr failed ({b_err}); using custom EMVCo builder.")
             qr_string = build_aba_pay_qr_string(
-                account_id=routing_acc or "merchant@aba",
+                account_id=routing_acc,
                 merchant_name=merchant_name,
                 merchant_city=merchant_city,
                 amount=amount_usd,
