@@ -231,6 +231,8 @@ async def create_order_khqr(order: Order, db: AsyncSession) -> Dict[str, Any]:
                     "aba_account": usd_acc,
                     "aba_account_usd": usd_acc,
                     "aba_account_khr": khr_acc,
+                    "currency": "USD",
+                    "ccy": "USD",
                     "req_time": req_time,
                     "hash": h,
                 }
