@@ -12,7 +12,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createKhqrPayment, checkPaymentStatus, simulatePaymentApproval } from "@/lib/api";
+import { createKhqrPayment, checkPaymentStatus } from "@/lib/api";
 import { KhqrPaymentData } from "@/lib/types";
 
 interface KhqrPaymentModalProps {
@@ -32,7 +32,6 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPaid, setIsPaid] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(300); // 5 minutes
-  const [isConfirmingManual, setIsConfirmingManual] = useState<boolean>(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -304,27 +303,6 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                   </a>
                 )}
 
-                {/* Instant Customer Confirmation Button */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsConfirmingManual(true);
-                    try {
-                      await simulatePaymentApproval(orderId);
-                      handleSuccess();
-                    } catch (err: any) {
-                      toast.error(err.message || "Failed to confirm payment");
-                    } finally {
-                      setIsConfirmingManual(false);
-                    }
-                  }}
-                  disabled={isConfirmingManual}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                  <span>{isConfirmingManual ? "Confirming Transfer..." : "I Have Completed Payment"}</span>
-                </button>
-
                 {/* Real-time automatic payment listener status */}
                 <div className="w-full p-2.5 rounded-2xl bg-secondary/60 border border-border/80 flex items-center gap-2.5">
                   <div className="relative flex items-center justify-center shrink-0">
@@ -332,9 +310,9 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   </div>
                   <div className="text-left">
-                    <p className="text-[11px] font-bold text-foreground">Live Transfer Listener</p>
+                    <p className="text-[11px] font-bold text-foreground">Awaiting Bank Transfer</p>
                     <p className="text-[10px] text-muted-foreground leading-tight">
-                      Order auto-confirms upon transfer or when clicking the button above.
+                      Order will verify automatically once your transfer is received.
                     </p>
                   </div>
                 </div>
