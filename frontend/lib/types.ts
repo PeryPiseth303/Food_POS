@@ -181,3 +181,29 @@ export interface StaffNotification {
   created_at: string;
   resolved_at?: string | null;
 }
+
+export interface KhqrPaymentData {
+  success: boolean;
+  order_id: number;
+  order_number: string;
+  amount_usd: number;
+  amount_khr: number;
+  qr_string: string;
+  qr_image: string;
+  abapay_deeplink: string;
+  aba_payment_link?: string;
+  transaction_id: string;
+  expires_at: string;
+  provider: string;
+  is_sandbox: boolean;
+  message?: string;
+}
+
+export interface PaymentStatusData {
+  order_id: number;
+  order_number: string;
+  payment_status: "pending" | "paid" | "failed";
+  is_paid: boolean;
+  payment_method: string;
+  message?: string;
+}

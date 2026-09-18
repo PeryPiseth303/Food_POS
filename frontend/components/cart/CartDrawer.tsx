@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import CustomerAuthModal from "@/components/auth/CustomerAuthModal";
+import { KhqrPaymentModal } from "./KhqrPaymentModal";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -68,9 +69,27 @@ export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawe
     addActiveOrderId,
   } = useCart();
 
-  const [paymentMethod, setPaymentMethod] = useState("mock_card");
+  const [paymentMethod, setPaymentMethod] = useState("aba_pay");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [khqrOrderId, setKhqrOrderId] = useState<number | null>(null);
+  const [isKhqrOpen, setIsKhqrOpen] = useState<boolean>(false);
+
+  const handleKhqrPaymentSuccess = (paidOrderId: number) => {
+    setIsKhqrOpen(false);
+    clearCart();
+    onClose();
+    router.push(`/orders/${paidOrderId}`);
+  };
+
+  const handleKhqrModalClose = () => {
+    setIsKhqrOpen(false);
+    if (khqrOrderId) {
+      clearCart();
+      onClose();
+      router.push(`/orders/${khqrOrderId}`);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -155,6 +174,19 @@ export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawe
         }).catch(() => {});
       }
 
+      addActiveOrderId(createdOrder.id);
+      setActiveOrderId(createdOrder.id);
+
+      if (paymentMethod === "aba_pay") {
+        setKhqrOrderId(createdOrder.id);
+        setIsKhqrOpen(true);
+        toast.info(`KHQR Payment Generated for Order #${createdOrder.order_number}`, {
+          description: "Please scan the KHQR code with ABA Mobile or any banking app to confirm.",
+          duration: 4500,
+        });
+        return;
+      }
+
       if (isDelivery) {
         toast.success(`🛵 Delivery Order #${createdOrder.order_number} Confirmed!`, {
           description: "Our kitchen has begun preparation. Courier will deliver fresh to your address.",
@@ -166,8 +198,6 @@ export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawe
           duration: 5500,
         });
       }
-      addActiveOrderId(createdOrder.id);
-      setActiveOrderId(createdOrder.id);
       clearCart();
       onClose();
       router.push(`/orders/${createdOrder.id}`);
@@ -504,52 +534,37 @@ export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawe
                     </div>
                   </div>
 
-                  {/* Payment Method Selector */}
+                  {/* Payment Method - Only QR Payment (KHQR / ABA Pay) */}
                   <div className="pt-3 border-t border-border/70">
-                    <span className="block text-xs font-semibold text-foreground mb-2">
-                      Payment Method
-                    </span>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod("mock_card")}
-                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
-                          paymentMethod === "mock_card"
-                            ? "bg-orange-500/10 border-orange-500 text-orange-950 dark:text-orange-200 shadow-sm ring-1 ring-orange-500/40"
-                            : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
-                        }`}
-                      >
-                        <CreditCard className="w-4 h-4 text-orange-600" />
-                        <span className="text-[10px] font-bold">Online Card</span>
-                      </button>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="block text-xs font-semibold text-foreground">
+                        Payment Method
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400">
+                        Official KHQR
+                      </span>
+                    </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod("aba_pay")}
-                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
-                          paymentMethod === "aba_pay"
-                            ? "bg-blue-500/10 border-blue-500 text-blue-950 dark:text-blue-200 shadow-sm ring-1 ring-blue-500/40"
-                            : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
-                        }`}
-                      >
-                        <QrCode className="w-4 h-4 text-blue-600" />
-                        <span className="text-[10px] font-bold">KHQR / ABA</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod(isDelivery ? "cash_on_delivery" : "cash")}
-                        className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 text-center transition-all ${
-                          paymentMethod === "cash" || paymentMethod === "cash_on_delivery"
-                            ? "bg-emerald-500/10 border-emerald-500 text-emerald-950 dark:text-emerald-200 shadow-sm ring-1 ring-emerald-500/40"
-                            : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
-                        }`}
-                      >
-                        <Banknote className="w-4 h-4 text-emerald-600" />
-                        <span className="text-[10px] font-bold">
-                          {isDelivery ? "Cash Delivery" : "At Counter"}
-                        </span>
-                      </button>
+                    <div className="p-3 rounded-2xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 text-foreground flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#003B64] to-[#0073B7] text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                          <QrCode className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                            <span>ABA PayWay</span>
+                            <span className="px-1.5 py-0.2 rounded font-extrabold bg-[#0073B7] text-white uppercase text-[9px]">
+                              ABA PAY
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Scan or tap to pay directly with ABA Mobile App
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center shrink-0">
+                        <div className="w-2 h-2 rounded-full bg-blue-600" />
+                      </div>
                     </div>
                   </div>
                 </>
@@ -611,6 +626,16 @@ export default function CartDrawer({ isOpen, onClose, onRescanTable }: CartDrawe
         onClose={() => setIsAuthModalOpen(false)}
         message="Please sign in or create an account to order food delivery."
       />
+
+      {/* KHQR & ABA Pay Payment Dialog */}
+      {khqrOrderId && (
+        <KhqrPaymentModal
+          orderId={khqrOrderId}
+          isOpen={isKhqrOpen}
+          onClose={handleKhqrModalClose}
+          onPaymentSuccess={handleKhqrPaymentSuccess}
+        />
+      )}
     </>
   );
 }

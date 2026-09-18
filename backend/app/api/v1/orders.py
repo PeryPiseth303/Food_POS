@@ -153,8 +153,8 @@ async def create_order(
     tip = round(order_in.tip, 2) if order_in.tip > 0 else 0.0
     total = round(subtotal + tax + tip, 2)
 
-    # Online orders can be paid via card/aba or pending via cash on delivery
-    is_online_paid = order_in.payment_method in ["mock_card", "aba_pay", "stripe"]
+    # Online card orders are pre-authorized mock cards; aba_pay & cash start as pending
+    is_online_paid = order_in.payment_method in ["mock_card", "stripe"]
 
     new_order = Order(
         order_number=generate_order_number(),
@@ -199,11 +199,13 @@ async def create_order(
         {"event": "new_order", "data": order_dict}
     )
 
-    # Dispatch notification to Telegram bot
-    background_tasks.add_task(
-        send_telegram_order_notification,
-        order_dict
-    )
+    # Dispatch receipt to Telegram bot ONLY if the order is already paid.
+    # If not paid (e.g. pending KHQR/ABA Pay), receipt is sent only AFTER payment is confirmed.
+    if full_order.payment_status == "paid":
+        background_tasks.add_task(
+            send_telegram_order_notification,
+            order_dict
+        )
 
     return order_out
 

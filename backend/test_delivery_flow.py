@@ -35,6 +35,18 @@ def main():
     if status == 400:
         status, body = post_json(f"{API_URL}/customer/login", {"email": reg_data["email"], "password": reg_data["password"]})
     
+    if status in (200, 201) and body.get("requires_verification"):
+        # Auto-activate test user in database for automated test suite
+        import sqlite3
+        conn = sqlite3.connect("foodservice.db")
+        cur = conn.cursor()
+        cur.execute("SELECT otp_code FROM customer_users WHERE email = ?", (reg_data["email"],))
+        row = cur.fetchone()
+        if row and row[0]:
+            otp_code = row[0]
+            status, body = post_json(f"{API_URL}/customer/verify-otp", {"email": reg_data["email"], "otp_code": otp_code})
+        conn.close()
+    
     assert status == 200, f"Auth failed with {status}: {body}"
     token = body["access_token"]
     print(f"Customer Authenticated! Token received.")
@@ -86,7 +98,8 @@ def main():
     print(f"Order successfully found in customer's order history.")
 
     print("\n=== 5. Testing Admin Live Board & Dashboard ===")
-    s, admin_auth = post_json(f"{API_URL}/auth/login", {"email": "admin@restaurant.com", "password": "admin123"})
+    from app.core.config import settings
+    s, admin_auth = post_json(f"{API_URL}/auth/login", {"email": settings.ADMIN_EMAIL, "password": settings.ADMIN_PASSWORD})
     assert s == 200, f"Admin login failed: {admin_auth}"
     admin_token = admin_auth["access_token"]
     

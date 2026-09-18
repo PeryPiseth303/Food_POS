@@ -29,18 +29,22 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useTheme } from "@/components/ThemeProvider";
+import { KhqrPaymentModal } from "@/components/cart/KhqrPaymentModal";
 
 export default function OrderTrackingPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = Number(params.id);
   const { setActiveOrderId, addActiveOrderId, activeOrderIds } = useCart();
+  const { setScope } = useTheme();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [relatedOrders, setRelatedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
+  const [isKhqrModalOpen, setIsKhqrModalOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const handleCallStaff = async () => {
@@ -101,6 +105,14 @@ export default function OrderTrackingPage() {
       fetchOrderDetails();
     }
   }, [orderId]);
+
+  useEffect(() => {
+    if (order?.order_type === "dine_in") {
+      setScope("dine_in");
+    } else if (order?.order_type === "delivery") {
+      setScope("delivery");
+    }
+  }, [order?.order_type, setScope]);
 
   // Load all active / related orders for this table or customer session
   useEffect(() => {
@@ -171,6 +183,12 @@ export default function OrderTrackingPage() {
             setActiveOrderId(msg.data.id);
             const statusInfo = getStatusInfo(msg.data.status);
             toast.info(`Order status: ${statusInfo.label}`);
+          } else if (msg.event === "payment_confirmed") {
+            setOrder(msg.data);
+            setActiveOrderId(msg.data.id);
+            toast.success("🎉 Payment confirmed via ABA / KHQR!", {
+              description: "Thank you! Our kitchen is preparing your order now.",
+            });
           }
         } catch (e) {
           console.error("WS message parse error", e);
@@ -325,6 +343,49 @@ export default function OrderTrackingPage() {
           </div>
         )}
 
+        {/* ABA Pay / KHQR Payment Action Banner */}
+        {order.payment_method === "aba_pay" && (
+          order.payment_status === "pending" ? (
+            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-red-600/10 via-rose-500/10 to-amber-500/10 border border-red-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md shadow-red-500/5 animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-red-600 to-rose-700 text-white flex flex-col items-center justify-center font-black shadow-md shadow-red-500/20 shrink-0">
+                  <span className="text-[10px] leading-none">KH</span>
+                  <span className="text-[11px] leading-none">QR</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-sm text-foreground">ABA Pay / KHQR Pending</h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold animate-pulse">
+                      Awaiting Scan
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Amount: <strong className="text-foreground">${order.total_amount.toFixed(2)}</strong> (≈ ៛{Math.round(order.total_amount * 4100).toLocaleString()})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsKhqrModalOpen(true)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-black shadow-md shadow-red-600/25 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>Scan & Pay Now</span>
+              </button>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2 text-emerald-950 dark:text-emerald-200 font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Paid with ABA Pay / KHQR</span>
+              </div>
+              <span className="font-extrabold text-emerald-700 dark:text-emerald-300">
+                ${order.total_amount.toFixed(2)}
+              </span>
+            </div>
+          )
+        )}
+
         {/* Status Hero Card */}
         <div className="modern-card rounded-3xl p-5 sm:p-7 text-center relative overflow-hidden">
           {/* Subtle top glow accent */}
@@ -420,8 +481,14 @@ export default function OrderTrackingPage() {
               <Receipt className="w-4 h-4 text-orange-600" />
               <h3 className="font-extrabold text-sm text-foreground">Order Summary</h3>
             </div>
-            <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-extrabold border border-emerald-500/20 uppercase tracking-wider">
-              {order.payment_status}
+            <span className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-extrabold border uppercase tracking-wider ${
+              order.payment_status === "paid"
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25"
+                : order.payment_status === "failed"
+                ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25"
+                : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25"
+            }`}>
+              {order.payment_status === "paid" ? "Paid" : "Payment Pending"}
             </span>
           </div>
 
@@ -571,6 +638,19 @@ export default function OrderTrackingPage() {
           )}
         </div>
       </main>
+
+      {/* KHQR & ABA Pay Payment Modal */}
+      {order && (
+        <KhqrPaymentModal
+          orderId={order.id}
+          isOpen={isKhqrModalOpen}
+          onClose={() => setIsKhqrModalOpen(false)}
+          onPaymentSuccess={() => {
+            setIsKhqrModalOpen(false);
+            setOrder((prev) => (prev ? { ...prev, payment_status: "paid", status: "confirmed" } : null));
+          }}
+        />
+      )}
     </div>
   );
 }

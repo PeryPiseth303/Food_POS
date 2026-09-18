@@ -151,6 +151,18 @@ export default function AdminDashboardPage() {
             if (selectedOrder && selectedOrder.id === updatedOrder.id) {
               setSelectedOrder(updatedOrder);
             }
+          } else if (payload.event === "order_payment_received") {
+            const updatedOrder: Order = payload.data;
+            setOrders((prev) =>
+              prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o))
+            );
+            if (selectedOrder && selectedOrder.id === updatedOrder.id) {
+              setSelectedOrder(updatedOrder);
+            }
+            toast.success(`💳 Payment Received for Order #${updatedOrder.order_number}!`, {
+              description: `${updatedOrder.payment_method.toUpperCase()}: $${Number(updatedOrder.total_amount).toFixed(2)} confirmed.`,
+              duration: 5000,
+            });
           }
         } catch (e) {
           console.error("WS event parse error", e);
@@ -477,6 +489,15 @@ export default function AdminDashboardPage() {
                           {formatCurrency(order.total_amount)}
                         </span>
                       </div>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 ${
+                          order.payment_status === "paid"
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                        }`}>
+                          <span>{order.payment_method === "aba_pay" ? "ABA KHQR" : order.payment_method} • {order.payment_status}</span>
+                        </span>
+                      </div>
                       {order.customer_name && (
                         <p className="text-[11px] text-muted-foreground">
                           Guest: <strong className="text-foreground">{order.customer_name}</strong>
@@ -646,6 +667,44 @@ export default function AdminDashboardPage() {
                   <strong>Special Requests:</strong> {selectedOrder.special_requests}
                 </div>
               )}
+
+              {/* Payment Status & Action */}
+              <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+                    selectedOrder.payment_status === "paid" ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+                  }`}>
+                    {selectedOrder.payment_status === "paid" ? "✓" : "!"}
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-foreground">
+                      {selectedOrder.payment_method === "aba_pay" ? "ABA Pay (KHQR)" : selectedOrder.payment_method.toUpperCase()}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Payment: <strong className="capitalize">{selectedOrder.payment_status}</strong>
+                    </p>
+                  </div>
+                </div>
+                {selectedOrder.payment_status !== "paid" && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const { simulatePaymentApproval } = await import("@/lib/api");
+                        await simulatePaymentApproval(selectedOrder.id);
+                        toast.success("Order marked as PAID!");
+                        setSelectedOrder((prev) => prev ? { ...prev, payment_status: "paid" } : null);
+                        setOrders((prev) => prev.map((o) => o.id === selectedOrder.id ? { ...o, payment_status: "paid" } : o));
+                      } catch (err: any) {
+                        toast.error("Failed to update payment status");
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                  >
+                    Mark Paid
+                  </button>
+                )}
+              </div>
 
               {/* Price Breakdown */}
               <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/80 space-y-1.5 text-xs">

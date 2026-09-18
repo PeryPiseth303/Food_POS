@@ -10,8 +10,49 @@ from app.models.menu import Category, MenuItem
 from app.models.order import Order, OrderItem
 from app.models.notification import StaffNotification
 from app.core.security import get_password_hash
+from app.core.config import settings
 
 logger = logging.getLogger("init_db")
+
+
+async def sync_env_admin():
+    """Ensure only the single administrator Gmail specified in .env exists and is active."""
+    admin_email = (settings.ADMIN_EMAIL or "").strip().lower()
+    admin_password = settings.ADMIN_PASSWORD
+    if not admin_email or not admin_password:
+        return
+
+    async with async_session_factory() as session:
+        # Check if authorized admin user exists
+        res = await session.execute(select(AdminUser).where(AdminUser.email == admin_email))
+        admin = res.scalar_one_or_none()
+
+        if not admin:
+            admin = AdminUser(
+                email=admin_email,
+                hashed_password=get_password_hash(admin_password),
+                full_name=settings.ADMIN_NAME or "Restaurant Admin",
+                role="admin",
+                is_active=True
+            )
+            session.add(admin)
+            logger.info(f"Created authorized admin user '{admin_email}' from .env configuration.")
+        else:
+            admin.hashed_password = get_password_hash(admin_password)
+            admin.full_name = settings.ADMIN_NAME or admin.full_name
+            admin.role = "admin"
+            admin.is_active = True
+            logger.info(f"Synchronized credentials for authorized admin '{admin_email}' from .env.")
+
+        # Deactivate any other legacy or unauthorized admin accounts
+        other_admins_res = await session.execute(
+            select(AdminUser).where(AdminUser.email != admin_email)
+        )
+        for other in other_admins_res.scalars().all():
+            other.is_active = False
+            logger.info(f"Deactivated unauthorized admin user account: {other.email}")
+
+        await session.commit()
 
 
 async def init_models():
@@ -40,11 +81,14 @@ async def init_models():
 
 async def seed_data():
     """Populate default restaurant data, tables, categories, menu items, and admin user."""
+    # Always ensure the authorized .env admin user is synced
+    await sync_env_admin()
+
     async with async_session_factory() as session:
-        # Check if already seeded
-        res = await session.execute(select(AdminUser).limit(1))
+        # Check if restaurant catalog already seeded
+        res = await session.execute(select(RestaurantTable).limit(1))
         if res.scalar_one_or_none():
-            logger.info("Database already contains data. Skipping seeding.")
+            logger.info("Database already contains data. Skipping catalog seeding.")
             return
 
         logger.info("Seeding initial restaurant data...")

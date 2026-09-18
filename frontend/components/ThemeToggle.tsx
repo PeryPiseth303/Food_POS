@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/ThemeProvider";
 import { Sun, Moon } from "lucide-react";
 
 interface ThemeToggleProps {
@@ -15,7 +15,7 @@ export default function ThemeToggle({
   showLabel = false,
   className = "",
 }: ThemeToggleProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme, scope } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -41,28 +41,38 @@ export default function ThemeToggle({
     );
   }
 
-  const currentTheme = theme === "system" ? resolvedTheme : theme;
-  const isDark = currentTheme === "dark";
+  const isDark = theme === "dark";
 
   const handleToggle = () => {
     setTheme(isDark ? "light" : "dark");
   };
 
+  const scopeLabel =
+    scope === "admin"
+      ? "Admin"
+      : scope === "dine_in"
+      ? "Dine-In"
+      : "Delivery";
+  const titleText = isDark
+    ? `Switch to light mode (${scopeLabel})`
+    : `Switch to dark mode (${scopeLabel})`;
+
   const baseStyle =
     variant === "pill"
-      ? "px-3 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-secondary border border-border/80 shadow-sm"
+      ? "px-3 py-1.5 rounded-full text-xs font-semibold bg-secondary/80 hover:bg-secondary border border-border/80 shadow-xs"
       : variant === "outline"
-      ? "p-2 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground shadow-sm"
+      ? "p-2 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground shadow-2xs"
       : variant === "ghost"
       ? "p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-      : "p-2 rounded-xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground shadow-xs";
+      : "p-2 rounded-xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground shadow-2xs";
 
   return (
     <button
       onClick={handleToggle}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`relative inline-flex items-center justify-center transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${baseStyle} ${className}`}
+      type="button"
+      aria-label={titleText}
+      title={titleText}
+      className={`relative inline-flex items-center justify-center transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 cursor-pointer select-none ${baseStyle} ${className}`}
     >
       <div className="relative w-4 h-4 flex items-center justify-center">
         {isDark ? (

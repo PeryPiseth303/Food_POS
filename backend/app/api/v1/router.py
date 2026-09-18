@@ -7,6 +7,7 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.websocket import router as ws_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.payments import router as payments_router
 
 api_router = APIRouter()
 
@@ -18,3 +19,4 @@ api_router.include_router(orders_router)
 api_router.include_router(analytics_router)
 api_router.include_router(ws_router)
 api_router.include_router(notifications_router)
+api_router.include_router(payments_router)

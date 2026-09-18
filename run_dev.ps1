@@ -15,5 +15,5 @@ Write-Host "`nAll development services are starting up!" -ForegroundColor Cyan
 Write-Host "  * Customer Menu & Home Delivery : http://localhost:3000" -ForegroundColor White
 Write-Host "  * Kitchen Admin Dashboard       : http://localhost:3000/admin/login" -ForegroundColor White
 Write-Host "  * FastAPI Interactive Swagger   : http://localhost:8000/docs" -ForegroundColor White
-Write-Host "`nDefault Admin credentials:" -ForegroundColor DarkGray
-Write-Host "  Email: admin@restaurant.com | Password: admin123" -ForegroundColor DarkGray
+Write-Host "`nAdmin Credentials:" -ForegroundColor DarkGray
+Write-Host "  Configured in backend/.env (ADMIN_EMAIL & ADMIN_PASSWORD)" -ForegroundColor DarkGray

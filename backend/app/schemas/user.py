@@ -86,6 +86,17 @@ class CustomerResendOTPResponse(BaseModel):
     debug_otp: Optional[str] = None
 
 
+class CustomerRequestLoginOTP(BaseModel):
+    email: EmailStr
+
+
+class CustomerRequestLoginOTPResponse(BaseModel):
+    success: bool = True
+    email: str
+    message: str
+    debug_otp: Optional[str] = None
+
+
 class CustomerTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

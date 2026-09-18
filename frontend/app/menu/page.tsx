@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useTheme } from "@/components/ThemeProvider";
 import CustomerAuthModal from "@/components/auth/CustomerAuthModal";
 
 function MenuContent() {
@@ -61,6 +62,8 @@ function MenuContent() {
     addActiveOrderId,
     removeActiveOrderId,
   } = useCart();
+
+  const { setScope } = useTheme();
 
   const [menuData, setMenuData] = useState<FullMenuResponse | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
@@ -178,10 +181,12 @@ function MenuContent() {
   useEffect(() => {
     if (tableParam) {
       setOrderType("dine_in");
+      setScope("dine_in");
     } else {
       setOrderType("delivery");
+      setScope("delivery");
     }
-  }, [tableParam, modeParam, setOrderType]);
+  }, [tableParam, modeParam, setOrderType, setScope]);
 
 
 
@@ -334,7 +339,7 @@ function MenuContent() {
 
             {/* Action buttons: ThemeToggle, Account, Mode Badge, Track Food */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <ThemeToggle variant="outline" className="hidden xs:inline-flex" />
+              <ThemeToggle variant="outline" className="inline-flex shrink-0" />
 
               {/* Customer Account Button */}
               <button

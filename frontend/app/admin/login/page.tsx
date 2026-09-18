@@ -4,34 +4,36 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { adminLogin } from "@/lib/api";
-import { Utensils, Lock, Mail, ArrowRight, Loader2, KeyRound, Sparkles, ChefHat } from "lucide-react";
+import { Lock, Mail, ArrowRight, Loader2, ChefHat, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@restaurant.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter your admin email address.");
+      return;
+    }
+    if (!password) {
+      toast.error("Please enter your admin password.");
+      return;
+    }
     setIsLoading(true);
     try {
-      await adminLogin(email, password);
-      toast.success("Welcome back, Chef!");
+      await adminLogin(email.trim().toLowerCase(), password);
+      toast.success("Welcome back, Administrator!");
       router.push("/admin/dashboard");
     } catch (err: any) {
-      toast.error(err.message || "Invalid email or password");
+      toast.error(err.message || "Invalid administrator credentials.");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDemoFill = () => {
-    setEmail("admin@restaurant.com");
-    setPassword("admin123");
-    toast.info("Demo credentials loaded!");
   };
 
   return (
@@ -50,17 +52,17 @@ export default function AdminLoginPage() {
         </div>
 
         <h1 className="text-xl sm:text-2xl font-black text-center tracking-tight text-foreground">
-          Kitchen & Staff Portal
+          Restaurant Admin Portal
         </h1>
         <p className="text-xs text-muted-foreground text-center mt-1 mb-6">
-          Sign in to manage live orders, menu catalog, tables, and analytics
+          Sign in to manage live orders, catalog, tables, and analytics
         </p>
 
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-4 text-xs sm:text-sm">
           <div>
             <label className="block text-xs font-semibold text-foreground mb-1.5">
-              Staff Email
+              Admin Email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -71,7 +73,7 @@ export default function AdminLoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@restaurant.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary/50 border border-input text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary/50 border border-input text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40 transition-all font-medium"
               />
             </div>
           </div>
@@ -94,29 +96,20 @@ export default function AdminLoginPage() {
             </div>
           </div>
 
-          {/* Quick Demo Fill Button */}
-          <button
-            type="button"
-            onClick={handleDemoFill}
-            className="w-full py-2 px-3 rounded-xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground text-xs font-bold flex items-center justify-center gap-1.5 border border-border/70 transition-all active:scale-98"
-          >
-            <KeyRound className="w-3.5 h-3.5 text-orange-500" />
-            <span>Load Demo Admin Credentials</span>
-          </button>
-
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-50 mt-2"
+            disabled={isLoading || !email.trim() || !password}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transition-all active:scale-[0.98] disabled:opacity-50 mt-3 cursor-pointer"
           >
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Authenticating...
+                <span>Authenticating Admin...</span>
               </>
             ) : (
               <>
-                <span>Sign In to Kitchen Dashboard</span>
+                <ShieldCheck className="w-4 h-4" />
+                <span>Sign In to Admin Dashboard</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

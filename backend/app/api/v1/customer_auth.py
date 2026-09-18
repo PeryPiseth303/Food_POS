@@ -14,6 +14,8 @@ from app.schemas.user import (
     CustomerVerifyOTP,
     CustomerResendOTP,
     CustomerResendOTPResponse,
+    CustomerRequestLoginOTP,
+    CustomerRequestLoginOTPResponse,
     CustomerUpdate,
     CustomerOut,
     CustomerTokenResponse,
@@ -124,13 +126,13 @@ async def register_customer(
     await db.refresh(customer)
 
     # Send OTP email
-    await send_otp_email(customer.email, otp_code, customer.full_name)
+    smtp_sent, _ = await send_otp_email(customer.email, otp_code, customer.full_name)
 
     return CustomerRegisterResponse(
         requires_verification=True,
         email=customer.email,
         message=f"A 6-digit verification code has been sent to {customer.email}.",
-        debug_otp=otp_code
+        debug_otp=None
     )
 
 
@@ -221,12 +223,12 @@ async def resend_customer_otp(
     customer.otp_expires_at = get_otp_expiry()
     await db.commit()
 
-    await send_otp_email(customer.email, otp_code, customer.full_name)
+    smtp_sent, _ = await send_otp_email(customer.email, otp_code, customer.full_name)
 
     return CustomerResendOTPResponse(
         success=True,
         message=f"A fresh verification code has been sent to {customer.email}.",
-        debug_otp=otp_code
+        debug_otp=None
     )
 
 
@@ -257,12 +259,106 @@ async def login_customer(
         customer.otp_code = otp_code
         customer.otp_expires_at = get_otp_expiry()
         await db.commit()
-        await send_otp_email(customer.email, otp_code, customer.full_name)
+        smtp_sent, _ = await send_otp_email(customer.email, otp_code, customer.full_name)
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"EMAIL_NOT_VERIFIED: Your account is not verified yet. A verification code has been sent to {customer.email}."
+            detail=f"EMAIL_NOT_VERIFIED: Your account is not verified yet. A verification code has been dispatched to {customer.email}."
         )
+
+    expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        subject=customer.id,
+        role="customer",
+        expires_delta=expires
+    )
+
+    return CustomerTokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        customer=CustomerOut.model_validate(customer)
+    )
+
+
+@router.post("/request-login-otp", response_model=CustomerRequestLoginOTPResponse)
+async def request_customer_login_otp(
+    req_in: CustomerRequestLoginOTP,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Request a 6-digit OTP code to log in to an existing account without password.
+    """
+    res = await db.execute(select(CustomerUser).where(CustomerUser.email == req_in.email))
+    customer = res.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account with this email does not exist. Please create an account first."
+        )
+
+    if not customer.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has been deactivated. Please contact restaurant staff."
+        )
+
+    otp_code = generate_otp_code()
+    customer.otp_code = otp_code
+    customer.otp_expires_at = get_otp_expiry()
+    await db.commit()
+
+    smtp_sent, _ = await send_otp_email(customer.email, otp_code, customer.full_name, purpose="login")
+
+    return CustomerRequestLoginOTPResponse(
+        success=True,
+        email=customer.email,
+        message=f"A 6-digit login code has been sent to {customer.email}.",
+        debug_otp=None
+    )
+
+
+@router.post("/login-with-otp", response_model=CustomerTokenResponse)
+async def login_customer_with_otp(
+    verify_in: CustomerVerifyOTP,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sign in to an existing account using the 6-digit OTP code sent to email.
+    """
+    res = await db.execute(select(CustomerUser).where(CustomerUser.email == verify_in.email))
+    customer = res.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found. Please register first."
+        )
+
+    if not customer.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has been deactivated."
+        )
+
+    clean_code = verify_in.otp_code.strip()
+    if not customer.otp_code or customer.otp_code.strip() != clean_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid login code. Please check your email and try again."
+        )
+
+    if is_otp_expired(customer.otp_expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Login code has expired. Please request a fresh code."
+        )
+
+    customer.is_verified = True
+    customer.otp_code = None
+    customer.otp_expires_at = None
+    await db.commit()
+    await db.refresh(customer)
 
     expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
